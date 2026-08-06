@@ -9,14 +9,17 @@
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {
+    "@distube/ytdl-core": "^4.16.12",
     "dotenv": "17.3.1",
     "drizzle-orm": "0.45.2",
     "framer-motion": "^12.43.0",
     "lucide-react": "^1.28.0",
     "next": "16.2.6",
     "pg": "8.20.0",
+    "play-dl": "^1.9.7",
     "react": "19.2.6",
-    "react-dom": "19.2.6"
+    "react-dom": "19.2.6",
+    "ytdl-core": "^4.11.5"
   },
   "devDependencies": {
     "@tailwindcss/postcss": "4.1.17",

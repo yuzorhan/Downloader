@@ -1,0 +1,7 @@
+{
+  "framework": "nextjs",
+  "functions": {
+    "src/app/api/download/route.ts": { "maxDuration": 60 },
+    "src/app/api/proxy/route.ts": { "maxDuration": 30 }
+  }
+}
