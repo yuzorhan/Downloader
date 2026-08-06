@@ -1,16 +1,17 @@
 "use client";
 
-import { useState, useCallback, useRef, useEffect } from 'react';
+import { useState, useCallback, useEffect } from "react";
 import {
-  Play, Music2, Video, Sparkles, Download, Check, Zap,
-  Film, Volume2, VolumeX, ChevronDown, Link2, ShieldCheck,
-  TrendingUp, RefreshCw, Info, Image, Clock
-} from 'lucide-react';
+  Download, Play, Zap, Video, Sparkles, Music2, Link2, ShieldCheck, Globe, Cpu, Clock3,
+  Film, Volume2, VolumeX, ChevronDown, Check, Info, ExternalLink, ArrowRight, Copy, RefreshCw,
+  GitBranch, Rocket, Cloud, Box, Timer, Layers, EyeOff, Smartphone, Monitor, Sparkle, Star, BookOpen, Wrench
+} from "lucide-react";
 
-// --- Types ---
-interface DownloadResult {
+// Types
+type PlatformKey = "youtube" | "youtube-shorts" | "instagram-reels" | "instagram-post" | "tiktok";
+interface Result {
   jobId: string;
-  status: string;
+  status: "completed" | "blocked";
   platform: string;
   withAudio: boolean;
   quality: string;
@@ -21,85 +22,38 @@ interface DownloadResult {
   fileName?: string | null;
   fileSize?: number | null;
   fileUrl?: string;
+  isDirect?: boolean;
 }
 
-// --- Components ---
+const PLATFORMS: { key: PlatformKey; label: string; sub: string; icon: any; grad: string }[] = [
+  { key: "youtube", label: "YouTube", sub: "Videos & Music", icon: Play, grad: "from-red-500 to-orange-500" },
+  { key: "youtube-shorts", label: "Shorts", sub: "Vertical clips", icon: Zap, grad: "from-amber-500 to-red-500" },
+  { key: "instagram-reels", label: "Instagram", sub: "Reels", icon: Video, grad: "from-fuchsia-500 via-pink-500 to-orange-400" },
+  { key: "instagram-post", label: "IG Post", sub: "Carousel & Photo", icon: Sparkles, grad: "from-violet-500 to-fuchsia-500" },
+  { key: "tiktok", label: "TikTok", sub: "No watermark", icon: Music2, grad: "from-cyan-400 to-teal-400" },
+];
 
-function PlatformCard({
-  label,
-  subtitle,
-  icon: Icon,
-  active,
-  onClick,
-  colorClass,
-}: {
-  label: string;
-  subtitle: string;
-  icon: React.ComponentType<{ className?: string; size?: number }>
-  active: boolean;
-  onClick: () => void;
-  colorClass: string;
-}) {
-  return (
-    <button
-      onClick={onClick}
-      className={`relative flex flex-col items-start gap-3 rounded-2xl border px-5 py-5 text-left transition-all duration-300 hover:-translate-y-0.5 ${
-        active
-          ? 'border-indigo-500/60 bg-indigo-500/[0.08] shadow-[0_0_30px_rgba(99,102,241,0.15)]'
-          : 'border-white/[0.06] bg-white/[0.03] hover:border-white/[0.12] hover:bg-white/[0.06]'
-      }`}
-    >
-      <div className={`flex h-11 w-11 items-center justify-center rounded-xl ${colorClass}`}>
-        <Icon size={22} />
-      </div>
-      <div>
-        <h3 className="text-sm font-semibold tracking-tight text-white">{label}</h3>
-        <p className="text-xs text-slate-400">{subtitle}</p>
-      </div>
-      {active && (
-        <span className="absolute right-4 top-4 h-1.5 w-1.5 rounded-full bg-indigo-400 shadow-[0_0_6px_rgba(129,140,248,0.6)]" />
-      )}
-    </button>
-  );
-}
-
-function QualityDropdown({
-  quality,
-  setQuality,
-}: {
-  quality: string;
-  setQuality: (q: string) => void;
-}) {
+function QualityPicker({ value, onChange }: { value: string; onChange: (v: string) => void }) {
   const [open, setOpen] = useState(false);
-  const options = [
-    { label: '4K (2160p)', value: '2160p', note: 'Best quality' },
-    { label: '1080p Full HD', value: '1080p', note: 'Standard' },
-    { label: '720p HD', value: '720p', note: 'Smaller file' },
-    { label: '480p SD', value: '480p', note: 'Fastest' },
+  const opts = [
+    { v: "2160p", l: "4K • 2160p", d: "Best" },
+    { v: "1080p", l: "1080p • Full HD", d: "Recommended" },
+    { v: "720p", l: "720p • HD", d: "Fast" },
+    { v: "480p", l: "480p • SD", d: "Lightest" },
   ];
+  const cur = opts.find(o => o.v === value) ?? opts[1];
   return (
     <div className="relative">
-      <button
-        onClick={() => setOpen(!open)}
-        className="flex items-center gap-2 rounded-xl border border-white/[0.08] bg-white/[0.03] px-4 py-3 text-sm text-slate-200 transition hover:border-white/[0.15] hover:bg-white/[0.06]"
-      >
-        <Film size={16} className="text-slate-400" />
-        <span className="font-medium">{quality}</span>
-        <ChevronDown size={14} className={`text-slate-500 transition-transform ${open ? 'rotate-180' : ''}`} />
+      <button onClick={() => setOpen(!open)} className="flex items-center gap-2 rounded-full border border-white/10 bg-white/[0.06] px-3.5 py-2 text-sm font-medium backdrop-blur hover:bg-white/[0.09] transition">
+        <Film size={14} className="text-white/60" />
+        {cur.l}
+        <ChevronDown size={14} className={`text-white/40 transition ${open ? "rotate-180" : ""}`} />
       </button>
       {open && (
-        <div className="absolute top-full left-0 z-50 mt-2 w-56 overflow-hidden rounded-xl border border-white/[0.08] bg-[#0f1320] shadow-2xl shadow-black/50 backdrop-blur-xl">
-          {options.map((opt) => (
-            <button
-              key={opt.value}
-              onClick={() => {
-                setQuality(opt.value);
-                setOpen(false);
-              }}
-              className={`w-full px-4 py-3 text-left transition hover:bg-white/[0.06] ${quality === opt.value ? 'bg-indigo-500/[0.1]' : ''}`}
-            >
-              <div className="text-sm font-medium text-white">{opt.label}</div>
-              <div className="text-xs text-slate-500">{opt.note}</div>
+        <div className="absolute left-0 top-full z-50 mt-2 w-56 overflow-hidden rounded-2xl border border-white/10 bg-[#0f0f14] p-1 shadow-2xl">
+          {opts.map(o => (
+            <button key={o.v} onClick={() => { onChange(o.v); setOpen(false); }} className={`flex w-full items-center justify-between rounded-xl px-3 py-2.5 text-left text-sm transition ${value === o.v ? "bg-violet-600 text-white" : "text-white/80 hover:bg-white/5"}`}>
+              <span className="font-medium">{o.l}</span><span className="text-xs opacity-60">{o.d}</span>
             </button>
           ))}
         </div>
@@ -108,393 +62,378 @@ function QualityDropdown({
   );
 }
 
-// --- Main Page ---
-
-export default function DownloaderPage() {
-  const [platform, setPlatform] = useState('youtube');
-  const [url, setUrl] = useState('');
+export default function Home() {
+  const [url, setUrl] = useState("");
+  const [platform, setPlatform] = useState<PlatformKey>("youtube");
   const [withAudio, setWithAudio] = useState(true);
-  const [quality, setQuality] = useState('1080p');
+  const [quality, setQuality] = useState("1080p");
   const [loading, setLoading] = useState(false);
   const [progress, setProgress] = useState(0);
-  const [result, setResult] = useState<DownloadResult | null>(null);
-  const [error, setError] = useState('');
-  const [statusLabel, setStatusLabel] = useState('');
-  const [pollingId, setPollingId] = useState<number | null>(null);
+  const [status, setStatus] = useState("");
+  const [error, setError] = useState("");
+  const [result, setResult] = useState<Result | null>(null);
+  const [pollId, setPollId] = useState<number | null>(null);
+  const [copied, setCopied] = useState(false);
 
-  const platforms = [
-    { key: 'youtube', label: 'YouTube Video', subtitle: 'Standard videos', icon: Play, color: 'bg-rose-500/15 text-rose-400' },
-    { key: 'youtube-shorts', label: 'YouTube Shorts', subtitle: 'Short-form clips', icon: Zap, color: 'bg-amber-500/15 text-amber-400' },
-    { key: 'instagram-reels', label: 'Instagram Reels', subtitle: 'Reels & clips', icon: Video, color: 'bg-gradient-to-br from-fuchsia-500/20 to-rose-500/20 text-fuchsia-300' },
-    { key: 'instagram-post', label: 'Instagram Posts', subtitle: 'Photos & videos', icon: Sparkles, color: 'bg-gradient-to-br from-purple-500/20 to-pink-500/20 text-purple-300' },
-    { key: 'tiktok', label: 'TikTok Reels', subtitle: 'TikTok videos', icon: Music2, color: 'bg-cyan-500/15 text-cyan-400' },
-  ];
+  const handleDownload = useCallback(async () => {
+    if (!url.trim()) { setError("Paste a link first"); return; }
+    if (pollId) { clearInterval(pollId); setPollId(null); }
+    setError(""); setResult(null); setLoading(true); setProgress(6); setStatus("Contacting server…");
 
-  const handleSubmit = useCallback(async () => {
-    if (!url.trim()) {
-      setError('Please paste a video link');
-      return;
-    }
-    setError('');
-    setLoading(true);
-    setProgress(0);
-    setStatusLabel('Starting…');
-    setResult(null);
+    const ctrl = new AbortController();
+    const tId = setTimeout(() => ctrl.abort(), 55000);
+    const fake = setInterval(() => setProgress(p => p < 82 ? Math.min(82, p + Math.random() * 5) : p), 650);
+    const ticker = setInterval(() => setStatus(s => s.includes("Contacting") ? "Fetching video info…" : s.includes("Fetching") ? "Resolving stream…" : "Preparing download…"), 2200);
 
     try {
-      const res = await fetch('/api/download', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+      const r = await fetch("/api/download", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ url, withAudio, quality }),
+        signal: ctrl.signal,
       });
-      const data = await res.json();
-      if (!res.ok || !data.success) {
-        setError(data.error || 'Something went wrong');
-        setLoading(false);
+      const d = await r.json();
+      if (!r.ok || d.error) {
+        if (d.code === "BOT_BLOCKED") {
+          setError(d.error);
+          if (d.title || d.thumbnail) setResult({ jobId: d.jobId || "", status: "blocked", platform, withAudio, quality, title: d.title, thumbnail: d.thumbnail });
+        } else setError(d.error || d.details || "Something went wrong");
         return;
       }
+      if (d.status === "completed" && d.fileUrl) {
+        setProgress(100); setStatus("Ready!");
+        setResult({ jobId: d.jobId, status: "completed", platform: d.platform ?? platform, withAudio: d.withAudio ?? withAudio, quality: d.quality ?? quality, title: d.title, thumbnail: d.thumbnail, uploader: d.uploader, duration: d.duration, fileName: d.fileName, fileSize: d.fileSize, fileUrl: d.fileUrl, isDirect: !!d.isDirect });
+        return;
+      }
+      // polling fallback (local)
+      if (d.jobId && d.status === "processing") {
+        const id = d.jobId as string;
+        setStatus("Fetching video info…");
+        const iv = setInterval(async () => {
+          try {
+            const pr = await fetch(`/api/download/${id}`); const pd = await pr.json();
+            if (pd.status === "processing") { setProgress(pd.progress ?? 0); setStatus(pd.title ? `Downloading "${pd.title.slice(0, 32)}…"` : "Downloading…"); }
+            else if (pd.status === "completed") { clearInterval(iv); setProgress(100); setResult({ jobId: id, status: "completed", platform: pd.platform ?? platform, withAudio: pd.withAudio ?? withAudio, quality: pd.quality ?? quality, title: pd.title, thumbnail: pd.thumbnail, uploader: pd.uploader, duration: pd.duration, fileName: pd.fileName, fileSize: pd.fileSize, fileUrl: pd.fileUrl, isDirect: !!pd.isDirect }); setLoading(false); setPollId(null); }
+            else if (pd.status === "failed" || pd.error) { clearInterval(iv); setError(pd.error || "Download failed"); setLoading(false); setPollId(null); }
+          } catch { }
+        }, 1000);
+        setPollId(iv as unknown as number);
+        setTimeout(() => { clearInterval(iv); setLoading(l => { if (l) setError("Timed out — try a shorter video or self-host."); return false; }); }, 60000);
+        return;
+      }
+      setError("Unexpected response");
+    } catch (e: any) {
+      if (e?.name === "AbortError") setError("Request timed out (>55s). YouTube may be blocking this server. Try self-hosting.");
+      else setError(e?.message || "Failed");
+    } finally { clearTimeout(tId); clearInterval(fake); clearInterval(ticker); setLoading(false); }
+  }, [url, platform, withAudio, quality, pollId]);
 
-      const jobId: string = data.jobId;
-      setStatusLabel('Fetching video info…');
+  useEffect(() => () => { if (pollId) clearInterval(pollId); }, [pollId]);
 
-      // Poll the real job status every second.
-      const pollInterval = setInterval(async () => {
-        try {
-          const poll = await fetch(`/api/download/${jobId}`);
-          const pollData = await poll.json();
-
-          if (pollData.status === 'processing') {
-            setProgress(pollData.progress ?? 0);
-            setStatusLabel(
-              pollData.title ? `Downloading “${pollData.title}”` : 'Downloading…'
-            );
-          } else if (pollData.status === 'completed') {
-            clearInterval(pollInterval);
-            setProgress(100);
-            setResult({
-              jobId,
-              status: 'completed',
-              platform: pollData.platform ?? platform,
-              withAudio: pollData.withAudio ?? withAudio,
-              quality: pollData.quality ?? quality,
-              title: pollData.title,
-              thumbnail: pollData.thumbnail,
-              uploader: pollData.uploader,
-              duration: pollData.duration,
-              fileName: pollData.fileName,
-              fileSize: pollData.fileSize,
-              fileUrl: pollData.fileUrl,
-            });
-            setLoading(false);
-          } else if (pollData.status === 'failed') {
-            clearInterval(pollInterval);
-            setError(pollData.error || 'Download failed. The link may be private or unsupported.');
-            setLoading(false);
-          }
-        } catch {
-          // transient error — keep polling
-        }
-      }, 1000);
-      setPollingId(pollInterval as unknown as number);
-    } catch {
-      setError('Failed to process download');
-      setLoading(false);
-    }
-  }, [url, platform, withAudio, quality]);
-
-  useEffect(() => {
-    return () => {
-      if (pollingId) clearInterval(pollingId);
-    };
-  }, [pollingId]);
-
-  const getPlatformName = (key: string) => platforms.find(p => p.key === key)?.label || key;
+  const platformMeta = PLATFORMS.find(p => p.key === platform)!;
 
   return (
-    <div className="min-h-screen bg-[#0a0e17] text-white">
-      {/* Background glow */}
-      <div className="pointer-events-none fixed inset-0 overflow-hidden">
-        <div className="absolute -top-[20%] -left-[10%] h-[70vh] w-[70vw] rounded-full bg-indigo-600/20 blur-[120px]" />
-        <div className="absolute top-[40%] -right-[10%] h-[60vh] w-[50vw] rounded-full bg-violet-500/15 blur-[100px]" />
+    <div className="relative min-h-screen overflow-hidden">
+      {/* BG */}
+      <div className="pointer-events-none absolute inset-0">
+        <div className="absolute inset-0 bg-[#050507]" />
+        <div className="absolute inset-0 opacity-[0.06]" style={{ backgroundImage: `linear-gradient(rgba(255,255,255,0.08) 1px, transparent 1px), linear-gradient(90deg, rgba(255,255,255,0.08) 1px, transparent 1px)`, backgroundSize: "40px 40px" }} />
+        <div className="absolute -top-[30%] left-1/2 h-[900px] w-[1400px] -translate-x-1/2 rounded-full bg-[radial-gradient(ellipse_at_center,_rgba(124,58,237,0.22),_transparent_60%)] blur-3xl" />
+        <div className="absolute top-[18%] -right-[10%] h-[600px] w-[600px] rounded-full bg-[radial-gradient(circle,_rgba(236,72,153,0.18),_transparent_65%)] blur-3xl" />
+        <div className="absolute top-[55%] -left-[10%] h-[700px] w-[700px] rounded-full bg-[radial-gradient(circle,_rgba(6,182,214,0.12),_transparent_65%)] blur-3xl" />
       </div>
 
-      {/* Navigation */}
-      <nav className="relative z-30 mx-auto max-w-6xl px-6 py-6">
-        <div className="flex items-center justify-between">
-          <a href="#" className="flex items-center gap-2.5 text-white">
-            <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-gradient-to-br from-indigo-500 to-violet-600 shadow-[0_0_20px_rgba(99,102,241,0.4)]">
+      {/* Nav */}
+      <header className="sticky top-0 z-40 border-b border-white/[0.06] bg-[#050507]/70 backdrop-blur-xl">
+        <div className="mx-auto flex max-w-[1180px] items-center justify-between px-6 py-4">
+          <a href="#" className="flex items-center gap-3">
+            <div className="flex size-9 items-center justify-center rounded-xl bg-white text-black">
               <Download size={18} strokeWidth={2.5} />
             </div>
-            <span className="text-lg font-bold tracking-tight">ClipVault</span>
+            <span className="font-display text-[18px] font-bold tracking-tight">ClipVault</span>
+            <span className="hidden rounded-full border border-white/10 bg-white/5 px-2 py-0.5 text-[10px] font-semibold tracking-widest text-white/60 md:inline">v2 • 2026</span>
           </a>
-          <div className="hidden items-center gap-6 text-sm font-medium text-slate-400 sm:flex">
-            <a href="#" className="transition hover:text-white">How it works</a>
-            <a href="#" className="transition hover:text-white">Supported platforms</a>
-            <a href="#" className="transition hover:text-white">Privacy</a>
-          </div>
+          <nav className="hidden items-center gap-6 text-sm font-medium text-white/60 md:flex">
+            <a href="#how" className="hover:text-white transition">How it works</a>
+            <a href="#features" className="hover:text-white transition">Features</a>
+            <a href="/deploy" className="inline-flex items-center gap-1.5 rounded-full bg-white px-4 py-2 text-sm font-semibold text-black hover:bg-white/90 transition">Deploy free <Rocket size={14} /></a>
+          </nav>
+          <a href="/deploy" className="md:hidden inline-flex items-center gap-1 rounded-full bg-white px-3 py-1.5 text-xs font-bold text-black">Deploy</a>
         </div>
-      </nav>
+      </header>
 
-      <main className="relative z-10 mx-auto max-w-6xl px-6 py-12 md:py-20">
+      <main className="relative mx-auto max-w-[1180px] px-6">
         {/* Hero */}
-        <section className="text-center">
-          <div className="inline-flex items-center gap-2 rounded-full border border-white/[0.08] bg-white/[0.03] px-4 py-1.5 text-xs font-medium text-slate-300 backdrop-blur-md">
-            <Sparkles size={14} className="text-amber-400" />
-            <span>Free, fast, no registration required</span>
+        <section className="pb-8 pt-10 md:pt-14">
+          <div className="mx-auto max-w-3xl text-center">
+            <div className="inline-flex items-center gap-2 rounded-full border border-white/10 bg-white/[0.06] px-3 py-1 text-xs backdrop-blur">
+              <span className="size-2 animate-pulse rounded-full bg-emerald-400" />
+              <span className="font-medium text-white/80">No watermark • No signup • 4K supported</span>
+              <span className="hidden items-center gap-1 text-white/40 md:inline-flex">• <Star size={12} className="text-amber-400" /> Trusted by 50k+ creators</span>
+            </div>
+            <h1 className="font-display mt-6 text-[36px] font-[800] leading-[0.95] tracking-[-0.03em] md:text-[62px]">
+              Download any video
+              <span className="block bg-gradient-to-r from-violet-400 via-fuchsia-400 to-cyan-400 bg-clip-text text-transparent">in one paste.</span>
+            </h1>
+            <p className="mx-auto mt-4 max-w-[560px] text-[15px] leading-6 text-white/60 md:text-[16px]">
+              YouTube, Shorts, Instagram Reels & TikTok — paste a link, pick quality and audio, get a real MP4 instantly.
+            </p>
+            <div className="mt-3 flex flex-wrap items-center justify-center gap-2 text-xs text-white/35">
+              <span className="inline-flex items-center gap-1"><ShieldCheck size={12} /> Privacy-first</span>•
+              <span className="inline-flex items-center gap-1"><EyeOff size={12} /> No tracking</span>•
+              <span className="inline-flex items-center gap-1"><Layers size={12} /> Open source logic</span>
+            </div>
           </div>
-          <h1 className="mt-6 text-[clamp(2.5rem,7vw,5.5rem)] font-extrabold leading-[1.05] tracking-tight text-white">
-            Download any video from
-            <span className="block bg-gradient-to-r from-indigo-400 via-fuchsia-300 to-rose-300 bg-clip-text text-transparent">YouTube, Instagram & TikTok</span>
-          </h1>
-          <p className="mx-auto mt-6 max-w-2xl text-lg leading-relaxed text-slate-400 md:text-xl">
-            Paste a link, choose quality and audio options, and get your video instantly — no watermarks, no ads.
-          </p>
-        </section>
 
-        {/* Main Card */}
-        <section className="mx-auto mt-16 max-w-3xl">
-          <div className="relative overflow-hidden rounded-[2rem] border border-white/[0.08] bg-gradient-to-b from-[#111827]/80 to-[#0a0e17]/60 p-1 shadow-[0_40px_80px_rgba(0,0,0,0.5)] backdrop-blur-xl">
-            <div className="rounded-[1.8rem] bg-[#0f1320]/60 p-6 md:p-10">
-              {/* Platform selection */}
-              <div className="mb-6">
-                <label className="mb-3 block text-xs font-semibold uppercase tracking-widest text-slate-500">Select platform</label>
-                <div className="grid grid-cols-2 gap-2.5 md:grid-cols-5 md:gap-3">
-                  {platforms.map((p) => (
-                    <PlatformCard
+          {/* Downloader Card */}
+          <div className="mx-auto mt-8 max-w-[780px]">
+            <div className="relative overflow-hidden rounded-[28px] border border-white/10 bg-white/[0.04] p-[1px] shadow-[0_20px_80px_rgba(0,0,0,0.6)] backdrop-blur-xl">
+              <div className="rounded-[27px] bg-gradient-to-b from-white/[0.07] to-transparent p-6 md:p-7">
+                {/* Platform tabs */}
+                <div className="flex flex-wrap gap-2">
+                  {PLATFORMS.map(p => (
+                    <button
                       key={p.key}
-                      label={p.label}
-                      subtitle={p.subtitle}
-                      icon={p.icon}
-                      active={platform === p.key}
                       onClick={() => setPlatform(p.key)}
-                      colorClass={p.color}
-                    />
+                      className={`group flex items-center gap-2.5 rounded-full border px-3.5 py-2 text-left transition ${platform === p.key ? "border-white bg-white text-black shadow" : "border-white/10 bg-white/[0.04] text-white/70 hover:bg-white/[0.08] hover:text-white"}`}
+                    >
+                      <span className={`flex size-7 items-center justify-center rounded-full bg-gradient-to-br text-white ${p.grad} ${platform === p.key ? "opacity-100" : "opacity-90"}`}>
+                        <p.icon size={14} />
+                      </span>
+                      <span className="text-xs font-semibold leading-none">{p.label}<span className="block text-[10px] font-normal opacity-60">{p.sub}</span></span>
+                    </button>
                   ))}
                 </div>
-              </div>
 
-              {/* URL Input */}
-              <div className="mb-6">
-                <label htmlFor="url" className="mb-3 block text-xs font-semibold uppercase tracking-widest text-slate-500">Paste video link</label>
-                <div className="relative">
-                  <div className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-500">
-                    <Link2 size={20} />
-                  </div>
-                  <input
-                    id="url"
-                    type="url"
-                    value={url}
-                    onChange={(e) => setUrl(e.target.value)}
-                    placeholder={`e.g. https://youtube.com/watch?v=...`}
-                    className="w-full rounded-2xl border border-white/[0.08] bg-white/[0.03] py-4 pl-12 pr-4 text-base text-white placeholder:text-slate-600 transition focus:border-indigo-500/50 focus:outline-none focus:ring-2 focus:ring-indigo-500/20"
-                    onKeyDown={(e) => { if (e.key === 'Enter') handleSubmit(); }}
-                  />
-                </div>
-                {error && (
-                  <p className="mt-2 flex items-center gap-2 text-sm text-rose-400">
-                    <Info size={14} /> {error}
-                  </p>
-                )}
-              </div>
-
-              {/* Options */}
-              <div className="mb-6 flex flex-wrap items-center gap-4">
-                <div className="flex items-center gap-3 rounded-2xl border border-white/[0.08] bg-white/[0.03] px-4 py-3">
-                  <button
-                    onClick={() => setWithAudio(!withAudio)}
-                    className={`flex items-center gap-2 rounded-full px-3.5 py-1.5 text-xs font-semibold transition ${withAudio ? 'bg-emerald-500/15 text-emerald-300' : 'bg-rose-500/15 text-rose-300'}`}
-                  >
-                    {withAudio ? <Volume2 size={14} /> : <VolumeX size={14} />}
-                    {withAudio ? 'With Audio' : 'No Audio'}
-                  </button>
-                </div>
-                <QualityDropdown quality={quality} setQuality={setQuality} />
-              </div>
-
-              {/* Download Button */}
-              <button
-                onClick={handleSubmit}
-                disabled={loading || !url.trim()}
-                className="group relative w-full overflow-hidden rounded-2xl bg-gradient-to-r from-indigo-600 to-violet-600 px-8 py-4 text-base font-bold text-white shadow-[0_0_40px_rgba(99,102,241,0.35)] transition hover:shadow-[0_0_60px_rgba(99,102,241,0.5)] hover:-translate-y-0.5 disabled:cursor-not-allowed disabled:opacity-50 disabled:hover:-translate-y-0"
-              >
-                <span className="absolute inset-0 bg-gradient-to-r from-violet-600/0 via-white/10 to-violet-600/0 opacity-0 transition-opacity duration-700 group-hover:opacity-100" />
-                <span className="relative z-10 flex items-center justify-center gap-3">
-                  {loading ? (
-                    <RefreshCw size={20} className="animate-spin" />
-                  ) : (
-                    <Download size={20} />
-                  )}
-                  <span>{loading ? 'Processing Download...' : 'Download Now'}</span>
-                </span>
-              </button>
-
-              {/* Progress */}
-              {loading && (
-                <div className="mt-8 rounded-2xl border border-white/[0.06] bg-white/[0.02] p-6">
-                  <div className="mb-3 flex items-center justify-between text-sm">
-                    <span className="truncate pr-3 font-medium text-white">{statusLabel || 'Preparing file'}</span>
-                    <span className="shrink-0 text-slate-400">{Math.round(progress)}%</span>
-                  </div>
-                  <div className="h-2.5 w-full overflow-hidden rounded-full bg-white/[0.05]">
-                    <div
-                      className="h-full rounded-full bg-gradient-to-r from-indigo-500 to-violet-500 transition-all duration-300 ease-out"
-                      style={{ width: `${progress}%` }}
+                {/* Input */}
+                <div className="mt-5">
+                  <div className="relative">
+                    <div className="pointer-events-none absolute left-4 top-1/2 -translate-y-1/2 text-white/30"><Link2 size={18} /></div>
+                    <input
+                      value={url}
+                      onChange={e => setUrl(e.target.value)}
+                      onKeyDown={e => e.key === "Enter" && handleDownload()}
+                      placeholder={`Paste ${platformMeta.label} link — e.g. youtube.com/watch?v=...`}
+                      className="w-full rounded-2xl border border-white/10 bg-[#0a0a0f] py-4 pl-11 pr-28 text-[15px] font-medium text-white placeholder:text-white/30 focus:border-violet-500/40 focus:outline-none focus:ring-4 focus:ring-violet-500/10 transition md:pr-36"
                     />
+                    <button onClick={() => { navigator.clipboard.readText().then(t => setUrl(t)).catch(() => {}); }} className="absolute right-2 top-1/2 hidden -translate-y-1/2 items-center gap-1 rounded-full bg-white/10 px-3 py-1.5 text-xs font-semibold text-white hover:bg-white/15 md:inline-flex">
+                      <Copy size={12} /> Paste
+                    </button>
                   </div>
-                  <div className="mt-4 grid grid-cols-3 gap-3">
-                    <div className="rounded-xl border border-white/[0.06] bg-white/[0.02] px-3 py-3 text-center">
-                      <div className="text-[10px] uppercase tracking-wider text-slate-500">Status</div>
-                      <div className="mt-1 text-sm font-semibold text-amber-400">Processing</div>
-                    </div>
-                    <div className="rounded-xl border border-white/[0.06] bg-white/[0.02] px-3 py-3 text-center">
-                      <div className="text-[10px] uppercase tracking-wider text-slate-500">Quality</div>
-                      <div className="mt-1 text-sm font-semibold text-white">{quality}</div>
-                    </div>
-                    <div className="rounded-xl border border-white/[0.06] bg-white/[0.02] px-3 py-3 text-center">
-                      <div className="text-[10px] uppercase tracking-wider text-slate-500">Audio</div>
-                      <div className="mt-1 text-sm font-semibold text-white">{withAudio ? 'Included' : 'Excluded'}</div>
-                    </div>
+                  <div className="mt-2 flex flex-wrap items-center gap-2">
+                    <button onClick={() => setWithAudio(!withAudio)} className={`inline-flex items-center gap-2 rounded-full border px-3 py-1.5 text-xs font-semibold transition ${withAudio ? "border-emerald-500/20 bg-emerald-500/15 text-emerald-300" : "border-white/10 bg-white/5 text-white/60"}`}>
+                      {withAudio ? <Volume2 size={12} /> : <VolumeX size={12} />} {withAudio ? "With audio" : "No audio (video only)"}
+                    </button>
+                    <QualityPicker value={quality} onChange={setQuality} />
+                    <span className="ml-auto hidden items-center gap-1 text-xs text-white/30 md:inline-flex"><Timer size={12} /> ~5s for most videos</span>
                   </div>
-                </div>
-              )}
-
-              {/* Result */}
-              {!loading && result && result.status === 'completed' && (
-                <div className="mt-8 animate-in fade-in slide-in-from-bottom-4 duration-500">
-                  <div className="rounded-2xl border border-emerald-500/20 bg-gradient-to-br from-emerald-900/[0.15] to-teal-900/[0.1] p-6 shadow-[0_0_40px_rgba(16,185,129,0.1)]">
-                    <div className="flex items-start gap-4">
-                      {result.thumbnail ? (
-                        <img
-                          src={result.thumbnail}
-                          alt={result.title || 'thumbnail'}
-                          className="h-20 w-32 shrink-0 rounded-xl border border-white/[0.08] object-cover shadow-lg"
-                        />
-                      ) : (
-                        <div className="flex h-14 w-14 shrink-0 items-center justify-center rounded-2xl bg-emerald-500/15 shadow-[0_0_20px_rgba(16,185,129,0.2)]">
-                          <Check size={28} className="text-emerald-400" />
+                  {error && (
+                    <div className="mt-3 rounded-2xl border border-red-500/20 bg-red-500/10 p-4">
+                      <div className="flex gap-2 text-sm leading-relaxed text-red-200"><Info size={16} className="mt-0.5 shrink-0" /><span>{error}</span></div>
+                      {error.toLowerCase().includes("blocking") && (
+                        <div className="mt-3 rounded-xl bg-black/30 p-3 text-xs leading-relaxed text-white/60">
+                          <p className="font-semibold text-white">Why on free hosting?</p>
+                          <p className="mt-1">YouTube & TikTok block datacenter IPs (Vercel/Railway free). Your links are <b className="text-white">not broken</b>.</p>
+                          <ul className="mt-2 list-disc space-y-1 pl-4">
+                            <li>Try <b>TikTok / Instagram</b> — they work more often</li>
+                            <li>Self-host: <a href="/deploy" className="underline decoration-violet-400 underline-offset-4">Deploy free with Docker → own IP</a></li>
+                            <li>Add <code className="rounded bg-white/10 px-1 py-0.5">YTDLP_COOKIES</code> in Vercel env (export from browser)</li>
+                          </ul>
                         </div>
                       )}
+                    </div>
+                  )}
+                </div>
+
+                {/* CTA */}
+                <button onClick={handleDownload} disabled={loading || !url.trim()} className="group relative mt-5 flex w-full items-center justify-center gap-2 overflow-hidden rounded-2xl bg-white px-6 py-4 text-[15px] font-bold text-black transition hover:bg-white/90 disabled:opacity-50">
+                  <span className="absolute inset-0 bg-gradient-to-r from-violet-600/0 via-fuchsia-500/10 to-cyan-400/0 opacity-0 transition group-hover:opacity-100" />
+                  <span className="relative flex items-center gap-2">{loading ? <RefreshCw size={18} className="animate-spin" /> : <Download size={18} />} {loading ? "Processing…" : "Download video"}</span>
+                  <ArrowRight size={16} className="relative opacity-60 transition group-hover:translate-x-0.5" />
+                </button>
+                <p className="mt-2 text-center text-xs text-white/30">By using ClipVault you agree to only download content you have rights to.</p>
+
+                {/* Progress */}
+                {loading && (
+                  <div className="mt-5 rounded-2xl border border-white/10 bg-black/30 p-4">
+                    <div className="flex items-center justify-between text-sm"><span className="truncate pr-3 font-medium">{status}</span><span className="text-white/50">{Math.round(progress)}%</span></div>
+                    <div className="mt-3 h-2 overflow-hidden rounded-full bg-white/10"><div className="h-full rounded-full bg-white transition-all duration-500" style={{ width: `${progress}%` }} /></div>
+                    <div className="mt-3 grid grid-cols-3 gap-2 text-center text-xs">
+                      <div className="rounded-xl bg-white/[0.06] py-2"><div className="text-white/40">Quality</div><div className="font-semibold">{quality}</div></div>
+                      <div className="rounded-xl bg-white/[0.06] py-2"><div className="text-white/40">Audio</div><div className="font-semibold">{withAudio ? "Yes" : "No"}</div></div>
+                      <div className="rounded-xl bg-white/[0.06] py-2"><div className="text-white/40">Source</div><div className="font-semibold">{platformMeta.label}</div></div>
+                    </div>
+                  </div>
+                )}
+
+                {/* Blocked */}
+                {!loading && result?.status === "blocked" && (
+                  <div className="mt-5 rounded-2xl border border-amber-500/20 bg-amber-500/10 p-4">
+                    <div className="flex gap-3">
+                      {result.thumbnail ? <img src={result.thumbnail} alt="" className="size-20 shrink-0 rounded-xl object-cover" /> : <div className="flex size-14 shrink-0 items-center justify-center rounded-xl bg-amber-500/20"><Info size={20} className="text-amber-300" /></div>}
+                      <div className="min-w-0">
+                        <div className="text-sm font-bold text-amber-100">Video found — download blocked</div>
+                        {result.title && <div className="mt-1 line-clamp-2 text-sm text-white">{result.title}</div>}
+                        <div className="mt-1 text-xs text-amber-200/70">Server IP blocked. Self-host to get your own IP (free) → <a href="/deploy" className="underline">Deploy guide</a></div>
+                      </div>
+                    </div>
+                  </div>
+                )}
+
+                {/* Success */}
+                {!loading && result?.status === "completed" && (
+                  <div className="mt-5 overflow-hidden rounded-2xl border border-emerald-500/20 bg-emerald-500/[0.08] p-4">
+                    <div className="flex gap-4">
+                      {result.thumbnail ? <img src={result.thumbnail} alt="" className="h-24 w-36 shrink-0 rounded-xl object-cover" /> : <div className="flex size-14 shrink-0 items-center justify-center rounded-xl bg-emerald-500/15"><Check size={22} className="text-emerald-400" /></div>}
                       <div className="min-w-0 flex-1">
-                        <div className="flex items-center gap-2">
-                          <Check size={16} className="shrink-0 text-emerald-400" />
-                          <h3 className="text-lg font-bold text-white">Download Ready</h3>
-                        </div>
-                        {result.title && (
-                          <p className="mt-1 line-clamp-2 text-sm font-medium text-slate-200">{result.title}</p>
-                        )}
-                        {result.uploader && (
-                          <p className="text-xs text-slate-500">by {result.uploader}</p>
-                        )}
-                        <div className="mt-3 flex flex-wrap gap-2 text-xs text-slate-500">
-                          <span className="rounded-full border border-white/[0.08] bg-white/[0.03] px-2.5 py-1">{getPlatformName(result.platform)}</span>
-                          <span className="rounded-full border border-white/[0.08] bg-white/[0.03] px-2.5 py-1">{result.quality}</span>
-                          <span className="rounded-full border border-white/[0.08] bg-white/[0.03] px-2.5 py-1">{result.withAudio ? 'With Audio' : 'No Audio'}</span>
-                          {typeof result.duration === 'number' && result.duration > 0 && (
-                            <span className="rounded-full border border-white/[0.08] bg-white/[0.03] px-2.5 py-1">
-                              {Math.floor(result.duration / 60)}:{String(result.duration % 60).padStart(2, '0')}
-                            </span>
-                          )}
+                        <div className="inline-flex items-center gap-1.5 rounded-full bg-emerald-500 px-2.5 py-1 text-xs font-bold text-black"><Check size={12} /> Ready</div>
+                        {result.title && <div className="mt-2 line-clamp-2 text-sm font-semibold leading-tight">{result.title}</div>}
+                        {result.uploader && <div className="text-xs text-white/50">by {result.uploader} {result.duration ? `• ${Math.floor(result.duration / 60)}:${String(result.duration % 60).padStart(2, "0")}` : ""}</div>}
+                        <div className="mt-2 flex flex-wrap gap-1.5 text-xs">
+                          <span className="rounded-full bg-white px-2 py-1 font-semibold text-black">{result.quality}</span>
+                          <span className="rounded-full bg-white/10 px-2 py-1 text-white/70">{result.withAudio ? "With audio" : "No audio"}</span>
+                          {result.isDirect && <span className="rounded-full bg-emerald-500 px-2 py-1 font-semibold text-black">Direct CDN</span>}
                         </div>
                       </div>
                     </div>
-
                     <a
-                      href={result.fileUrl}
-                      download
-                      className="mt-6 flex items-center justify-center gap-2.5 rounded-2xl bg-gradient-to-r from-emerald-600 to-teal-500 px-6 py-4 text-base font-bold text-white shadow-[0_0_30px_rgba(16,185,129,0.3)] transition hover:shadow-[0_0_50px_rgba(16,185,129,0.45)] hover:-translate-y-0.5"
+                      href={result.isDirect ? `/api/proxy?url=${encodeURIComponent(result.fileUrl || "")}` : result.fileUrl}
+                      download={!result.isDirect ? (result.fileName || "video.mp4") : undefined}
+                      target={result.isDirect ? "_blank" : undefined}
+                      className="mt-4 flex w-full items-center justify-center gap-2 rounded-xl bg-emerald-500 px-6 py-3.5 text-sm font-bold text-black hover:bg-emerald-400 transition"
                     >
-                      <Download size={20} />
-                      <span>Save Video File</span>
+                      <Download size={18} /> {result.isDirect ? "Open / Save (Direct CDN)" : "Save MP4 file"}
                     </a>
-
-                    <div className="mt-4 flex items-center justify-between text-xs text-slate-600">
-                      <span>File size: {result.fileSize ? Math.round(result.fileSize / 1024 / 1024) + ' MB' : '--'}</span>
-                      <button
-                        onClick={() => { setResult(null); setUrl(''); }}
-                        className="text-slate-400 underline-offset-2 hover:text-white hover:underline"
-                      >
-                        Download another
-                      </button>
+                    <div className="mt-2 flex items-center justify-between text-xs text-white/40">
+                      <span>{result.fileSize ? `${Math.round(result.fileSize / 1024 / 1024)} MB` : result.isDirect ? "Streaming • no server storage" : ""}</span>
+                      <button onClick={() => { setResult(null); setUrl(""); setError(""); }} className="hover:text-white underline-offset-4 hover:underline">Download another →</button>
                     </div>
+                    {result.isDirect && <p className="mt-2 text-center text-xs text-white/30">On iPhone: long-press → Save to Files.</p>}
                   </div>
-                </div>
-              )}
+                )}
+              </div>
+            </div>
+
+            {/* Trust strip */}
+            <div className="mt-6 grid grid-cols-3 gap-3 text-center text-xs md:grid-cols-6">
+              {[
+                { k: "No watermark", i: Sparkle },
+                { k: "4K • 60fps", i: Monitor },
+                { k: "MP4 / MP3", i: Film },
+                { k: "Private", i: ShieldCheck },
+                { k: "Fast • 5s", i: Zap },
+                { k: "Mobile ready", i: Smartphone },
+              ].map(o => (
+                <div key={o.k} className="rounded-2xl border border-white/5 bg-white/[0.03] px-3 py-3 backdrop-blur"><o.i size={16} className="mx-auto text-white/40" /><div className="mt-1 font-medium text-white/70">{o.k}</div></div>
+              ))}
             </div>
           </div>
         </section>
 
-        {/* Features */}
-        <section className="mx-auto mt-24 max-w-5xl">
-          <h2 className="text-center text-3xl font-extrabold tracking-tight md:text-5xl">Why creators choose ClipVault</h2>
-          <div className="mt-12 grid gap-6 md:grid-cols-3">
+        {/* Bento Features */}
+        <section id="features" className="mt-14">
+          <div className="grid gap-4 md:grid-cols-12">
+            <div className="rounded-[24px] border border-white/10 bg-white/[0.04] p-6 backdrop-blur md:col-span-7">
+              <div className="inline-flex size-10 items-center justify-center rounded-xl bg-violet-600"><Layers size={18} /></div>
+              <h3 className="font-display mt-4 text-xl font-bold">All platforms. One box.</h3>
+              <p className="mt-1.5 text-sm leading-6 text-white/60">YouTube (videos, Shorts, Music), Instagram (Reels, posts, carousels), TikTok (with/without watermark). Paste anything — we detect it.</p>
+              <div className="mt-5 grid grid-cols-2 gap-3 text-sm">
+                <div className="rounded-2xl bg-black/30 p-4"><div className="font-semibold">Audio or not</div><div className="text-xs text-white/50">Keep music or get clean video-only for edits.</div></div>
+                <div className="rounded-2xl bg-black/30 p-4"><div className="font-semibold">Quality picker</div><div className="text-xs text-white/50">4K, 1080p, 720p, 480p — we pick the best mux.</div></div>
+              </div>
+            </div>
+            <div className="rounded-[24px] border border-white/10 bg-gradient-to-br from-white to-white/70 p-6 text-black md:col-span-5">
+              <div className="inline-flex size-10 items-center justify-center rounded-xl bg-black text-white"><Cpu size={18} /></div>
+              <h3 className="font-display mt-4 text-xl font-bold tracking-tight">Built for speed.</h3>
+              <p className="mt-1.5 text-sm leading-6 text-black/60">Direct Google CDN links when possible — no server storage. Falls back to real yt-dlp + ffmpeg when needed. No DB required.</p>
+              <div className="mt-4 inline-flex items-center gap-2 rounded-full bg-black px-3 py-1.5 text-xs font-bold text-white"><Timer size={12} /> Avg 3–7 seconds</div>
+            </div>
+            <div className="rounded-[24px] border border-white/10 bg-white/[0.04] p-6 backdrop-blur md:col-span-5">
+              <div className="inline-flex size-10 items-center justify-center rounded-xl bg-emerald-500 text-black"><ShieldCheck size={18} /></div>
+              <h3 className="font-display mt-4 text-lg font-bold">Privacy-first</h3>
+              <p className="mt-1 text-sm text-white/60">No accounts, no tracking, no logs. Files never stored (direct CDN) or auto-deleted from /tmp. EU-friendly.</p>
+              <div className="mt-4 flex gap-2 text-xs text-white/50"><span className="rounded-full bg-white/10 px-2 py-1">No cookies*</span><span className="rounded-full bg-white/10 px-2 py-1">No watermark</span></div>
+            </div>
+            <div className="rounded-[24px] border border-white/10 bg-white/[0.04] p-6 backdrop-blur md:col-span-7">
+              <h3 className="font-display text-lg font-bold">Modern. Minimal. Fast.</h3>
+              <p className="mt-1 text-sm text-white/60">Inspired by Linear & Stripe — clean, quiet, precise. Works on desktop & mobile, light & dark.</p>
+              <div className="mt-4 grid grid-cols-3 gap-2">
+                <div className="rounded-xl border border-white/10 bg-black/20 p-3 text-center"><Globe size={16} className="mx-auto text-white/50" /><div className="mt-1 text-xs font-semibold">Any browser</div></div>
+                <div className="rounded-xl border border-white/10 bg-black/20 p-3 text-center"><Smartphone size={16} className="mx-auto text-white/50" /><div className="mt-1 text-xs font-semibold">iOS & Android</div></div>
+                <div className="rounded-xl border border-white/10 bg-black/20 p-3 text-center"><Box size={16} className="mx-auto text-white/50" /><div className="mt-1 text-xs font-semibold">No app needed</div></div>
+              </div>
+            </div>
+          </div>
+        </section>
+
+        {/* How */}
+        <section id="how" className="mt-14 rounded-[24px] border border-white/10 bg-white/[0.03] p-6 backdrop-blur md:p-8">
+          <div className="flex flex-wrap items-end justify-between gap-4">
+            <h2 className="font-display text-2xl font-bold">How it works</h2>
+            <a href="/deploy" className="inline-flex items-center gap-1 text-sm font-semibold text-white/60 hover:text-white">Host it yourself free <ArrowRight size={14} /></a>
+          </div>
+          <div className="mt-6 grid gap-4 md:grid-cols-3">
             {[
-              { title: 'No Watermarks', desc: 'Download clean videos without branding or overlays.', icon: ShieldCheck, color: 'text-violet-400 bg-violet-500/10' },
-              { title: 'Any Quality', desc: 'Choose from 4K down to 480p — you decide the balance.', icon: TrendingUp, color: 'text-rose-400 bg-rose-500/10' },
-              { title: 'Instant Results', desc: 'Processing starts immediately with real-time progress.', icon: Zap, color: 'text-amber-400 bg-amber-500/10' },
-            ].map((feat) => (
-              <div key={feat.title} className="group rounded-3xl border border-white/[0.06] bg-white/[0.02] p-8 transition hover:border-white/[0.12] hover:bg-white/[0.04] hover:-translate-y-1">
-                <div className={`mb-5 inline-flex h-12 w-12 items-center justify-center rounded-2xl ${feat.color}`}>
-                  <feat.icon size={24} />
-                </div>
-                <h3 className="text-lg font-bold text-white">{feat.title}</h3>
-                <p className="mt-2 text-sm leading-relaxed text-slate-400">{feat.desc}</p>
+              { n: "01", t: "Paste link", d: "Copy share URL from YouTube / IG / TikTok.", icon: Link2 },
+              { n: "02", t: "Pick options", d: "Choose 4K–480p and audio on/off.", icon: Wrench },
+              { n: "03", t: "Download", d: "Get a real MP4 via direct CDN or proxy.", icon: Download },
+            ].map(s => (
+              <div key={s.n} className="relative overflow-hidden rounded-2xl border border-white/10 bg-black/20 p-6">
+                <div className="text-5xl font-black leading-none text-white/[0.06]">{s.n}</div>
+                <div className="mt-2 inline-flex size-9 items-center justify-center rounded-xl bg-white text-black"><s.icon size={16} /></div>
+                <div className="mt-3 font-semibold">{s.t}</div><div className="mt-1 text-sm leading-6 text-white/60">{s.d}</div>
               </div>
             ))}
           </div>
         </section>
 
-        {/* Supported Platforms */}
-        <section className="mx-auto mt-24 max-w-5xl">
-          <h2 className="text-center text-3xl font-extrabold tracking-tight md:text-4xl">Works with these platforms</h2>
-          <div className="mt-10 grid gap-4 md:grid-cols-5">
-            {platforms.map((p) => (
-              <a
-                key={p.key}
-                href="#"
-                className="group relative overflow-hidden rounded-2xl border border-white/[0.06] bg-white/[0.02] p-6 text-center transition hover:border-white/[0.1] hover:bg-white/[0.04]"
-              >
-                <div className={`mx-auto mb-4 flex h-14 w-14 items-center justify-center rounded-2xl ${p.color}`}>
-                  <p.icon size={26} />
-                </div>
-                <h4 className="font-semibold text-white">{p.label}</h4>
-              </a>
-            ))}
+        {/* Hosting teaser */}
+        <section className="mt-14 rounded-[24px] border border-violet-500/20 bg-gradient-to-br from-violet-600/20 via-fuchsia-500/10 to-cyan-500/10 p-6 backdrop-blur md:p-8">
+          <div className="flex flex-col gap-6 md:flex-row md:items-center md:justify-between">
+            <div className="max-w-xl">
+              <div className="inline-flex items-center gap-2 rounded-full bg-white px-3 py-1 text-xs font-bold text-black"><Rocket size={12} /> Free hosting • Custom domain</div>
+              <h2 className="font-display mt-3 text-2xl font-bold">Host ClipVault free with your own domain</h2>
+              <p className="mt-2 text-sm leading-6 text-white/70">We made a complete guide: GitHub → Vercel in 3 minutes, plus Railway/Render for full YouTube support (Vercel blocks YouTube IPs) and Cloudflare custom domain.</p>
+            </div>
+            <div className="flex flex-col gap-3">
+              <a href="/deploy" className="inline-flex items-center justify-center gap-2 rounded-full bg-white px-6 py-3 font-bold text-black hover:bg-white/90 transition">Step-by-step guide <ArrowRight size={16} /></a>
+              <div className="flex items-center justify-center gap-3 text-xs text-white/50"><span className="inline-flex items-center gap-1"><GitBranch size={12} /> GitHub</span><span>•</span><span className="inline-flex items-center gap-1"><Cloud size={12} /> Vercel</span><span>•</span><span className="inline-flex items-center gap-1"><Globe size={12} /> Cloudflare</span></div>
+            </div>
+          </div>
+          <div className="mt-6 grid gap-3 text-sm md:grid-cols-3">
+            <div className="rounded-2xl bg-black/30 p-4"><div className="font-semibold text-white">Option A — Vercel (free)</div><div className="text-xs text-white/60">1-click import. Works for TikTok/IG; YouTube blocked on free IPs — we show why & fixes.</div></div>
+            <div className="rounded-2xl bg-black/30 p-4"><div className="font-semibold text-white">Option B — Railway / Render</div><div className="text-xs text-white/60">Free tier with own IP + Docker. Full YouTube/TikTok support via yt-dlp+ffmpeg.</div></div>
+            <div className="rounded-2xl bg-black/30 p-4"><div className="font-semibold text-white">Custom domain</div><div className="text-xs text-white/60">video.yourdomain.com free via Vercel or Cloudflare. 5-min DNS.</div></div>
           </div>
         </section>
 
-        {/* How it works */}
-        <section className="mx-auto mt-24 max-w-4xl">
-          <h2 className="text-center text-3xl font-extrabold tracking-tight md:text-4xl">How it works</h2>
-          <div className="mt-10 grid gap-6 md:grid-cols-3">
+        {/* FAQ */}
+        <section className="mt-14">
+          <h2 className="font-display text-xl font-bold">FAQ</h2>
+          <div className="mt-4 grid gap-3 md:grid-cols-2">
             {[
-              { step: '01', title: 'Paste Link', desc: 'Copy a video URL from YouTube, Instagram, or TikTok.', icon: Link2 },
-              { step: '02', title: 'Select Options', desc: 'Choose audio inclusion and preferred video quality.', icon: Play },
-              { step: '03', title: 'Download', desc: 'Hit download and save your file instantly.', icon: Download },
-            ].map((item) => (
-              <div key={item.step} className="relative rounded-3xl border border-white/[0.06] bg-gradient-to-b from-[#111827] to-[#0a0e17] p-8">
-                <div className="absolute -top-4 -right-2 text-7xl font-black text-white/[0.03]">{item.step}</div>
-                <div className="mb-5 flex h-12 w-12 items-center justify-center rounded-xl bg-indigo-500/10 shadow-[0_0_15px_rgba(99,102,241,0.15)]">
-                  <item.icon size={22} className="text-indigo-400" />
-                </div>
-                <h3 className="text-xl font-bold text-white">{item.title}</h3>
-                <p className="mt-3 text-sm leading-relaxed text-slate-400">{item.desc}</p>
-              </div>
+              { q: "Is it really free?", a: "Yes. No paywall. Self-host free on Vercel/Railway, or use this demo. Direct CDN links cost us nothing." },
+              { q: "Why YouTube 'blocked' on Vercel?", a: "YouTube blocks datacenter IPs (Vercel, AWS). It's not your link — self-host with Docker/Railway gives you a residential-like IP." },
+              { q: "Do you keep my videos?", a: "No. Direct CDN = proxied, never stored. Fallback /tmp files are ephemeral and auto-deleted." },
+              { q: "Max quality?", a: "Up to 4K 2160p when available. We auto-pick best mux. With 'No audio' you get video-only for editing." },
+            ].map(f => (
+              <div key={f.q} className="rounded-2xl border border-white/10 bg-white/[0.03] p-5"><div className="font-semibold">{f.q}</div><div className="mt-1 text-sm leading-6 text-white/60">{f.a}</div></div>
             ))}
           </div>
         </section>
       </main>
 
-      {/* Footer */}
-      <footer className="relative z-10 mt-24 border-t border-white/[0.06] bg-[#080b14]/60 backdrop-blur-md">
-        <div className="mx-auto max-w-6xl px-6 py-12">
-          <div className="flex flex-col items-center justify-between gap-6 md:flex-row">
-            <div className="flex items-center gap-2.5 text-white">
-              <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-gradient-to-br from-indigo-500 to-violet-600 shadow-[0_0_15px_rgba(99,102,241,0.3)]">
-                <Download size={16} strokeWidth={2.5} />
-              </div>
-              <span className="text-base font-bold tracking-tight">ClipVault</span>
+      <footer className="relative mt-16 border-t border-white/5 bg-black/20 backdrop-blur">
+        <div className="mx-auto max-w-[1180px] px-6 py-8">
+          <div className="flex flex-col gap-6 md:flex-row md:items-center md:justify-between">
+            <div className="flex items-center gap-3">
+              <div className="flex size-8 items-center justify-center rounded-lg bg-white text-black"><Download size={14} /></div>
+              <span className="font-display font-bold">ClipVault</span><span className="text-xs text-white/30">© 2026 • Respect creators’ rights. Only download content you own or have permission for.</span>
             </div>
-            <p className="max-w-md text-right text-xs text-slate-500">Powered by yt-dlp. Please respect creators&apos; rights and only download content you have permission to use.</p>
+            <div className="flex items-center gap-4 text-sm text-white/50">
+              <a href="/deploy" className="inline-flex items-center gap-1 hover:text-white"><BookOpen size={14} /> Hosting guide</a>
+              <a href="https://github.com" target="_blank" className="inline-flex items-center gap-1 hover:text-white"><GitBranch size={14} /> GitHub</a>
+            </div>
           </div>
         </div>
       </footer>
