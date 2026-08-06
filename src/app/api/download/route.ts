@@ -1,131 +1,82 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { randomUUID } from 'crypto';
-import { db } from '@/db';
-import { downloads } from '@/db/schema';
-import { eq } from 'drizzle-orm';
-import { getMetadata, downloadVideo } from '@/lib/ytdlp';
+import { bootstrap, getMetadata, downloadVideo, DOWNLOAD_DIR } from '@/lib/ytdlp';
+import { setJobStatus, getJobStatus } from '@/lib/job-store';
+import fs from 'fs';
+import path from 'path';
 
 export const maxDuration = 300;
 
 const PLATFORM_PATTERNS: { name: string; regex: RegExp }[] = [
   { name: 'youtube-shorts', regex: /(?:https?:\/\/)?(?:www\.)?youtube\.com\/shorts\/[\w-]+/i },
-  { name: 'youtube', regex: /(?:https?:\/\/)?(?:www\.)?(?:youtube\.com|youtu\.be)\/.+/i },
+  { name: 'youtube', regex: /(?:https?:\/\/)?(?:www\.)?(?:youtube\.com|ytu\.be)\/.+/i },
   { name: 'instagram-reels', regex: /(?:https?:\/\/)?(?:www\.)?instagram\.com\/reels?\/[\w-]+/i },
   { name: 'instagram-post', regex: /(?:https?:\/\/)?(?:www\.)?instagram\.com\/p\/[\w-]+/i },
   { name: 'tiktok', regex: /(?:https?:\/\/)?(?:www\.|vm\.|vt\.)?tiktok\.com\/.+/i },
 ];
 
 function detectPlatform(url: string): string | null {
-  const match = PLATFORM_PATTERNS.find((p) => p.regex.test(url));
-  return match ? match.name : null;
-}
-
-// Runs the actual download in the background and updates the DB row.
-async function runJob(jobId: string, url: string, withAudio: boolean, quality: string) {
-  try {
-    // Fetch metadata first (best-effort)
-    try {
-      const meta = await getMetadata(url);
-      await db
-        .update(downloads)
-        .set({
-          title: meta.title,
-          thumbnail: meta.thumbnail,
-          uploader: meta.uploader,
-          duration: meta.duration ?? null,
-        })
-        .where(eq(downloads.jobId, jobId));
-    } catch {
-      // metadata failure is non-fatal
-    }
-
-    let lastWritten = 0;
-    const outcome = await downloadVideo({
-      url,
-      withAudio,
-      quality,
-      jobId,
-      onProgress: (percent) => {
-        // Throttle DB writes to whole-number jumps of >= 5%
-        const rounded = Math.floor(percent);
-        if (rounded - lastWritten >= 5) {
-          lastWritten = rounded;
-          db.update(downloads)
-            .set({ progress: rounded })
-            .where(eq(downloads.jobId, jobId))
-            .catch(() => {});
-        }
-      },
-    });
-
-    await db
-      .update(downloads)
-      .set({
-        status: 'completed',
-        progress: 100,
-        fileName: outcome.fileName,
-        fileSize: outcome.fileSize,
-        completedAt: new Date(),
-      })
-      .where(eq(downloads.jobId, jobId));
-  } catch (err) {
-    const message = err instanceof Error ? err.message : 'Unknown error';
-    await db
-      .update(downloads)
-      .set({ status: 'failed', errorMessage: message.slice(0, 500) })
-      .where(eq(downloads.jobId, jobId))
-      .catch(() => {});
-  }
+  return PLATFORM_PATTERNS.find(p => p.regex.test(url))?.name ?? null;
 }
 
 export async function POST(req: NextRequest) {
   try {
     const body = await req.json();
-    const { url, withAudio, quality } = body as {
-      url?: string;
-      withAudio?: boolean;
-      quality?: string;
-    };
+    const url = String(body?.url || '').trim();
+    const withAudio = body?.withAudio !== false;
+    const quality = String(body?.quality || '1080p');
 
-    if (!url || typeof url !== 'string') {
-      return NextResponse.json({ error: 'Please provide a valid URL' }, { status: 400 });
-    }
+    if (!url) return NextResponse.json({ error: 'Please provide a valid URL' }, { status: 400 });
 
-    const platform = detectPlatform(url.trim());
-    if (!platform) {
-      return NextResponse.json(
-        { error: 'Unsupported link. Use a YouTube, Instagram, or TikTok URL.' },
-        { status: 400 }
-      );
-    }
+    const platform = detectPlatform(url);
+    if (!platform) return NextResponse.json({ error: 'Unsupported link' }, { status: 400 });
 
     const jobId = randomUUID();
-    const audio = withAudio !== false;
-    const q = quality || '1080p';
+    setJobStatus(jobId, { status: 'processing', progress: 0, platform, withAudio, quality });
 
-    await db.insert(downloads).values({
-      jobId,
-      url: url.trim(),
-      platform,
-      withAudio: audio,
-      quality: q,
-      status: 'processing',
-      progress: 0,
-    });
+    // Background download (non-blocking)
+    (async () => {
+      try {
+        await bootstrap();
+        // Metadata best-effort
+        try {
+          const meta = await getMetadata(url);
+          setJobStatus(jobId, { title: meta.title, thumbnail: meta.thumbnail, uploader: meta.uploader, duration: meta.duration ?? null, progress: 10 });
+        } catch {
+          setJobStatus(jobId, { progress: 10 });
+        }
 
-    // Kick off the download without blocking the response.
-    runJob(jobId, url.trim(), audio, q);
+        let lastProgress = 10;
+        const outcome = await downloadVideo({
+          url,
+          withAudio,
+          quality,
+          jobId,
+          onProgress: (percent) => {
+            const rounded = Math.floor(percent);
+            if (rounded - lastProgress >= 5) {
+              lastProgress = rounded;
+              setJobStatus(jobId, { progress: Math.min(95, rounded) });
+            }
+          },
+        });
 
-    return NextResponse.json({
-      success: true,
-      jobId,
-      platform,
-      withAudio: audio,
-      quality: q,
-      status: 'processing',
-    });
-  } catch (err) {
-    console.error('Download error:', err);
+        setJobStatus(jobId, {
+          status: 'completed',
+          progress: 100,
+          fileName: outcome.fileName,
+          fileSize: outcome.fileSize,
+          fileUrl: `/api/download/${jobId}/file`,
+        });
+      } catch (err: unknown) {
+        const msg = err instanceof Error ? err.message : 'Download failed';
+        setJobStatus(jobId, { status: 'failed', error: msg.slice(0, 500) });
+      }
+    })();
+
+    return NextResponse.json({ success: true, jobId, platform, withAudio, quality, status: 'processing' });
+  } catch (e) {
+    console.error('Download error:', e);
     return NextResponse.json({ error: 'Internal server error' }, { status: 500 });
   }
 }
